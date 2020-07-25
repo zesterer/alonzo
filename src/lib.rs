@@ -1,4 +1,4 @@
-#![feature(arbitrary_self_types)]
+#![feature(arbitrary_self_types, trait_alias)]
 
 pub mod eval;
 
