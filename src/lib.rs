@@ -1,3 +1,5 @@
+#![feature(arbitrary_self_types)]
+
 pub mod eval;
 
 use std::{
@@ -13,7 +15,6 @@ pub trait BaseTy: Clone {
 pub enum Value<T: BaseTy, L: Clone> {
     Base(T::Value),
     Lazy(Box<TyNode<Expr<T, L>, T>>),
-    Func(L, Box<TyNode<Expr<T, L>, T>>),
     Product(Vec<Self>),
     Variant(usize, Box<Self>),
 }

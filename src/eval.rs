@@ -41,8 +41,8 @@ impl<T: BaseTy, L: Clone> Default for Intrinsics<T, L> {
 }
 
 impl<T: BaseTy, L: Clone> Expr<T, L> {
-    pub fn eval(&self, scope: &Scope<T, L>, intrinsics: &Intrinsics<T, L>) -> Result<Value<T, L>, Error> {
-        Ok(match self {
+    pub fn eval(self: &TyNode<Self, T>, scope: &Scope<T, L>, intrinsics: &Intrinsics<T, L>) -> Result<Value<T, L>, Error> {
+        Ok(match &**self {
             Expr::Value(v) => v.clone(),
             Expr::Lazy(v) => Value::Lazy(v.clone()),
             Expr::Intrinsic(i, params) => {
@@ -56,11 +56,14 @@ impl<T: BaseTy, L: Clone> Expr<T, L> {
                 let arg = param.eval(scope, intrinsics)?;
 
                 match f.eval(scope, intrinsics)? {
-                    Value::Func(l, body) => body.eval(&scope.with(l.clone(), arg), intrinsics)?,
+                    Value::Lazy(expr) => match &**expr {
+                        Expr::Func(l, body) => body.eval(&scope.with(l.clone(), arg), intrinsics)?,
+                        _ => return Err(Error::NotAFunction),
+                    },
                     _ => return Err(Error::NotAFunction),
                 }
             },
-            Expr::Func(l, body) => Value::Func(l.clone(), body.clone()),
+            Expr::Func(l, body) => Value::Lazy(Box::new(self.clone())),
         })
     }
 }
@@ -78,10 +81,10 @@ mod tests {
 
     #[test]
     fn basic() {
-        let expr = Expr::<_, ()>::Intrinsic(0, vec![
+        let expr = TyNode::new(Expr::<_, ()>::Intrinsic(0, vec![
             TyNode::new(Expr::Value(Value::Base(3)), Ty::Base(Integer)),
             TyNode::new(Expr::Value(Value::Base(5)), Ty::Base(Integer)),
-        ]);
+        ]), Ty::Base(Integer));
 
         let result = expr.eval(
             &Scope::None,
