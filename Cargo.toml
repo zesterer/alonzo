@@ -2,5 +2,6 @@
 
 members = [
     "alonzo-mir",
+    "alonzo-lir",
     "alonzo-ty",
 ]

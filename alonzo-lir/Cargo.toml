@@ -1,9 +1,8 @@
 [package]
-name = "alonzo-mir"
+name = "alonzo-lir"
 version = "0.1.0"
 authors = ["Joshua Barretto <joshua.s.barretto@gmail.com>", "Christian Poveda <git@christianpoveda.xyz>"]
 edition = "2018"
 
 [dependencies]
 alonzo-ty = { path = "../alonzo-ty" }
-alonzo-lir = { path = "../alonzo-lir" }

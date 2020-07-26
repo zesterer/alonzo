@@ -1,6 +1,7 @@
 #![feature(arbitrary_self_types, trait_alias)]
 
 pub mod eval;
+pub mod lower;
 
 use std::collections::HashMap;
 

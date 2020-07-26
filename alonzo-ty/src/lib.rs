@@ -14,13 +14,17 @@ pub enum Ty<T: BaseTy> {
 
 #[derive(Clone)]
 pub struct TyNode<I, T: BaseTy> {
-    inner: I,
-    ty: Ty<T>,
+    pub inner: I,
+    pub ty: Ty<T>,
 }
 
 impl<I, T: BaseTy> TyNode<I, T> {
     pub fn new(inner: I, ty: Ty<T>) -> Self {
         Self { inner, ty }
+    }
+
+    pub fn map<J>(self, f: impl Fn(I) -> J) -> TyNode<J, T> {
+        TyNode::new(f(self.inner), self.ty)
     }
 }
 
