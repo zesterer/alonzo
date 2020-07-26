@@ -2,14 +2,9 @@
 
 pub mod eval;
 
-use std::{
-    collections::HashMap,
-    ops::Deref,
-};
+use std::collections::HashMap;
 
-pub trait BaseTy: Clone {
-    type Value: Clone;
-}
+use alonzo_ty::{BaseTy, TyNode};
 
 #[derive(Clone)]
 pub enum Value<T: BaseTy, L: Clone> {
@@ -29,40 +24,12 @@ impl<T: BaseTy, L: Clone> Value<T, L> {
 }
 
 #[derive(Clone)]
-pub enum Ty<T: BaseTy> {
-    Base(T),
-    Func(Box<Self>, Box<Self>),
-    Product(Vec<Self>),
-    Sum(Vec<Self>),
-}
-
-#[derive(Clone)]
 pub enum Expr<T: BaseTy, L: Clone> {
     Value(Value<T, L>),
     Lazy(Box<TyNode<Self, T>>),
     Intrinsic(usize, Vec<TyNode<Self, T>>),
     Apply(Box<TyNode<Self, T>>, Box<TyNode<Self, T>>),
     Func(L, Box<TyNode<Self, T>>),
-}
-
-#[derive(Clone)]
-pub struct TyNode<I, T: BaseTy> {
-    inner: I,
-    ty: Ty<T>,
-}
-
-impl<I, T: BaseTy> TyNode<I, T> {
-    pub fn new(inner: I, ty: Ty<T>) -> Self {
-        Self {
-            inner,
-            ty,
-        }
-    }
-}
-
-impl<I, T: BaseTy> Deref for TyNode<I, T> {
-    type Target = I;
-    fn deref(&self) -> &Self::Target { &self.inner }
 }
 
 pub struct Program<T: BaseTy, L: Clone> {
