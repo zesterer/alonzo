@@ -47,12 +47,6 @@ macro_rules! pat {
             Ty::Base(Num),
         )
     };
-    // ($x:ident) => {
-    //     TyNode::<_, Rusty>::new(
-    //         Expr::<Rusty>::Binding(stringify!($x)),
-    //         Ty::Base(Num),
-    //     )
-    // };
 }
 
 macro_rules! expr {

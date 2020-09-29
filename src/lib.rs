@@ -183,7 +183,8 @@ impl<L: Lang> Expr<L> {
             Expr::Match(e, arms) => {
                 e.get_binding_deps_inner(accounted_for, deps);
                 for (pat, arm) in arms {
-                    // TODO: pat.get_binding_deps_inner(accounted_for, deps);
+                    pat.get_binding_deps_inner(accounted_for, deps);
+
                     let bindings = pat.get_binding_outputs();
                     let old_len = accounted_for.len();
                     accounted_for.extend(bindings);
@@ -248,7 +249,22 @@ pub enum Pat<L: Lang> {
 }
 
 impl<L: Lang> Pat<L> {
-    pub fn get_binding_outputs_inner(&self, bindings: &mut Vec<L::Ident>) {
+    fn get_binding_deps_inner(&self, accounted_for: &mut Vec<L::Ident>, deps: &mut Vec<L::Ident>) {
+        match self {
+            Pat::Wildcard => {},
+            Pat::Expr(e) => e.get_binding_deps_inner(accounted_for, deps),
+            Pat::Product(xs) => xs
+                .iter()
+                .for_each(|x| x.get_binding_deps_inner(accounted_for, deps)),
+            Pat::Variant(_, x) => x.get_binding_deps_inner(accounted_for, deps),
+            Pat::List(xs, _) => xs
+                .iter()
+                .for_each(|x| x.get_binding_deps_inner(accounted_for, deps)),
+            Pat::Bind(_, x) => x.get_binding_deps_inner(accounted_for, deps),
+        }
+    }
+
+    fn get_binding_outputs_inner(&self, bindings: &mut Vec<L::Ident>) {
         match self {
             Pat::Wildcard => {},
             Pat::Expr(_) => {},
@@ -266,6 +282,7 @@ impl<L: Lang> Pat<L> {
         }
     }
 
+    /// Get a list of the bindings that this pattern emits when matched against a value.
     pub fn get_binding_outputs(&self) -> Vec<L::Ident> {
         let mut bindings = Vec::new();
         self.get_binding_outputs_inner(&mut bindings);
