@@ -40,20 +40,20 @@ macro_rules! pat {
     // Numeric literal
     ($x:literal) => {
         TyNode::<_, Rusty>::new(
-            Pat::<Rusty>::Expr(Box::new(TyNode::new(
+            Pat::<Rusty>::Expr(TyNode::new(
                 Expr::BaseVal($x),
                 Ty::Base(Num),
-            ))),
+            )),
             Ty::Base(Num),
         )
     };
     // Wildcard
     ($x:ident) => {
         TyNode::<_, Rusty>::new(
-            Pat::<Rusty>::Bind(stringify!($x), Box::new(TyNode::new(
+            Pat::<Rusty>::Bind(stringify!($x), TyNode::new(
                 Pat::Wildcard,
                 Ty::Base(Num),
-            ))),
+            )),
             Ty::Base(Num),
         )
     };
@@ -70,7 +70,7 @@ macro_rules! expr {
     (match $val:tt in { $( $pat:tt => $arm:tt ),* $(,)? }) => {
         TyNode::<_, Rusty>::new(
             Expr::<Rusty>::Match(
-                Box::new(expr!($val)),
+                expr!($val),
                 vec![$( (pat!($pat), expr!($arm)) ),*],
             ),
             Ty::Base(Num),
@@ -79,7 +79,7 @@ macro_rules! expr {
     // Call
     ($arg:tt : $($f:tt)*) => {
         TyNode::<_, Rusty>::new(
-            Expr::<Rusty>::Apply(Box::new(expr!($($f)*)), Box::new(expr!($arg))),
+            Expr::<Rusty>::Apply(expr!($($f)*), expr!($arg)),
             Ty::Base(Num),
         )
     };
@@ -132,7 +132,7 @@ macro_rules! expr {
     // Functions
     ($p:ident -> $($body:tt)*) => {
         TyNode::<_, Rusty>::new(
-            Expr::<Rusty>::Func(stringify!($p), Box::new(expr!($($body)*))),
+            Expr::<Rusty>::Func(stringify!($p), expr!($($body)*)),
             Ty::Base(Num),
         )
     };
