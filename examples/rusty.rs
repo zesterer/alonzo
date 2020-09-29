@@ -1,4 +1,4 @@
-use alonzo::*;
+use alonzo::{*, eval::*};
 
 #[derive(Clone, PartialEq, Debug)]
 struct Num;
@@ -41,7 +41,7 @@ macro_rules! pat {
     ($x:literal) => {
         TyNode::<_, Rusty>::new(
             Pat::<Rusty>::Expr(Box::new(TyNode::new(
-                Expr::Value(Value::Base($x)),
+                Expr::BaseVal($x),
                 Ty::Base(Num),
             ))),
             Ty::Base(Num),
@@ -106,7 +106,7 @@ macro_rules! expr {
     // Numeric literal
     ($x:literal) => {
         TyNode::<_, Rusty>::new(
-            Expr::<Rusty>::Value(Value::Base($x)),
+            Expr::<Rusty>::BaseVal($x),
             Ty::Base(Num),
         )
     };
