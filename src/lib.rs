@@ -289,3 +289,29 @@ impl<I: Debug, L: Lang> fmt::Debug for TyNode<I, L> {
 pub struct Program<L: Lang> {
     pub(crate) defs: HashMap<L::Ident, TyNode<Expr<L>, L>>,
 }
+
+impl<L: Lang> Default for Program<L> {
+    fn default() -> Self {
+        Self {
+            defs: HashMap::default(),
+        }
+    }
+}
+
+impl<L: Lang> Program<L> {
+    /// Insert a definition with the given name.
+    pub fn with_def(mut self, name: L::Ident, body: TyNode<Expr<L>, L>) -> Self {
+        self.insert(name, body);
+        self
+    }
+
+    /// Insert a definition with the given name.
+    pub fn insert(&mut self, name: L::Ident, body: TyNode<Expr<L>, L>) {
+        self.defs.insert(name, body);
+    }
+
+    /// Get a reference to the definition with the given name, should it exist.
+    pub fn def(&self, name: &L::Ident) -> Option<&TyNode<Expr<L>, L>> {
+        self.defs.get(name)
+    }
+}

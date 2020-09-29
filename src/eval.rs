@@ -2,8 +2,9 @@ use crate::*;
 
 #[derive(Debug)]
 pub enum Error {
-    NotAFunction,
+    NoSuchDef,
     NoSuchBinding,
+    NotAFunction,
     NotABaseValue,
 }
 
@@ -138,6 +139,19 @@ impl<L: Lang> Value<L> {
             Value::Lazy(x) => x.eval(scope, intrinsics)?.into_base(scope, intrinsics),
             _ => Err(Error::NotABaseValue),
         }
+    }
+}
+
+impl<L: Lang> Program<L> {
+    /// Evaluate the given definition within the context of this program and a series of supported intrinsics.
+    pub fn eval_def(&self, name: &L::Ident, intrinsics: &Intrinsics<L>) -> Result<Value<L>, Error> {
+        self
+            .def(name)
+            .ok_or_else(|| Error::NoSuchDef)?
+            .eval(
+                &Scope::Program(self),
+                intrinsics,
+            )
     }
 }
 
