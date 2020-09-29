@@ -47,6 +47,16 @@ macro_rules! pat {
             Ty::Base(Num),
         )
     };
+    // Wildcard
+    ($x:ident) => {
+        TyNode::<_, Rusty>::new(
+            Pat::<Rusty>::Bind(stringify!($x), Box::new(TyNode::new(
+                Pat::Wildcard,
+                Ty::Base(Num),
+            ))),
+            Ty::Base(Num),
+        )
+    };
 }
 
 macro_rules! expr {
@@ -136,7 +146,7 @@ fn main() {
         let add_five_to = (add(x)) in
         match { (add_five_to(y)), (add_five_to(x)) } in {
             { 10.0, 10.0 } => 0.0,
-            { 12.0, 10.0 } => 100.0,
+            { 12.0, x } => (x * 5.0),
         }
     };
 
