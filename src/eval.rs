@@ -4,8 +4,10 @@ use crate::*;
 pub enum Error {
     NotAFunction,
     NoSuchBinding,
+    NotABaseValue,
 }
 
+/// Represents values available in the current scope.
 pub enum Scope<'a, L: Lang> {
     None,
     Program(&'a Program<L>),
@@ -14,14 +16,17 @@ pub enum Scope<'a, L: Lang> {
 }
 
 impl<'a, L: Lang> Scope<'a, L> {
+    /// Bind a value, creating a new scope where the binding is valid.
     pub fn with<'b>(&'b self, label: L::Ident, val: Value<L>) -> Scope<'b, L> where 'a: 'b {
         Scope::Local(label, val, self)
     }
 
+    /// Bind many values, creating a new scope where their bindings are valid.
     pub fn with_many<'b>(&'b self, many: Vec<(L::Ident, Value<L>)>) -> Scope<'b, L> where 'a: 'b {
         Scope::Many(many, self)
     }
 
+    /// Search for the value corresponding to a binding in this scope.
     pub fn find(&self, label: &L::Ident) -> Option<Value<L>> {
         match self {
             Scope::None => None,
@@ -43,17 +48,19 @@ impl<'a, L: Lang> Scope<'a, L> {
 
 pub trait IntrinsicFn<L: Lang> = Fn(&Scope<L>, &Intrinsics<L>, &[Value<L>]) -> Result<Value<L>, Error> + 'static;
 
+/// A store of the intrinsic functions supported by a language.
 pub struct Intrinsics<L: Lang> {
     intrinsics: HashMap<usize, Box<dyn IntrinsicFn<L>>>,
 }
 
 impl<L: Lang> Intrinsics<L> {
+    /// Add a new intrinsic function with the given ID.
     pub fn with(mut self, id: usize, f: impl IntrinsicFn<L>) -> Self {
         self.intrinsics.insert(id, Box::new(f));
         self
     }
 
-    pub fn eval(&self, i: usize, args: &[Value<L>], scope: &Scope<L>) -> Result<Value<L>, Error> {
+    fn eval(&self, i: usize, args: &[Value<L>], scope: &Scope<L>) -> Result<Value<L>, Error> {
         self.intrinsics[&i](scope, self, args)
     }
 }
@@ -67,6 +74,7 @@ impl<L: Lang> Default for Intrinsics<L> {
 }
 
 impl<L: Lang> Expr<L> {
+    /// Evaluate this expression within the context of a scope and a series of supported intrinsics.
     pub fn eval(self: &TyNode<Self, L>, scope: &Scope<L>, intrinsics: &Intrinsics<L>) -> Result<Value<L>, Error> {
         Ok(match &**self {
             Expr::Value(v) => v.clone(),
@@ -122,14 +130,13 @@ impl<L: Lang> Expr<L> {
 }
 
 impl<L: Lang> Value<L> {
+    /// Attempt to extract a base value from this value. If the value is expressed lazily, this function will force its
+    /// evaluation.
     pub fn into_base(self, scope: &Scope<L>, intrinsics: &Intrinsics<L>) -> Result<L::BaseVal, Error> {
         match self {
             Value::Base(x) => Ok(x.clone()),
             Value::Lazy(x) => x.eval(scope, intrinsics)?.into_base(scope, intrinsics),
-            Value::Func(_, _, _) => panic!("Expected base value, found function value"),
-            Value::Product(xs) => panic!("Expected base value, found product with {} elements", xs.len()),
-            Value::Variant(tag, _) => panic!("Expected base value, found variant with tag {}", tag),
-            Value::List(xs) => panic!("Expected base value, found list of length {}", xs.len()),
+            _ => Err(Error::NotABaseValue),
         }
     }
 }
