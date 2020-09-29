@@ -1,5 +1,6 @@
 #![feature(arbitrary_self_types, trait_alias)]
 
+/// Reference implementation of program evaluation.
 pub mod eval;
 
 use std::{
@@ -10,18 +11,47 @@ use std::{
     hash::Hash,
 };
 
-// A trait representing the various attributes of a language
+/// Definitions that allow a compiler frontend to communicate with `alonzo`.
 pub trait Lang {
+    /// A type representing the primitives supported by the language.
+    ///
+    /// This type goes hand-in-hand with [`Lang::BaseVal`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// enum PrimitiveTy {
+    ///     Null,
+    ///     Int,
+    ///     Float,
+    ///     Char,
+    /// }
+    /// ```
     type BaseTy: Clone + PartialEq + Debug;
+
+    /// A type representing primitive values supported by the language.
+    ///
+    /// This type goes hand-in-hand with [`Lang::BaseTy`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// enum PrimitiveVal {
+    ///     Null,
+    ///     Int(i64),
+    ///     Float(f64),
+    ///     Char(char),
+    /// }
+    /// ```
     type BaseVal: Clone + PartialEq + Debug;
 
+    /// A type representing an identifier produced by the parser.
+    ///
+    /// Although using `String`/`&str` is valid, some form of interning is recommended for performance.
     type Ident: Clone + Hash + Eq + Debug;
 }
 
-pub trait BaseTy: Clone + PartialEq {
-    type Value: Clone;
-}
-
+/// Represents a value in a language.
 #[derive(Debug)]
 pub enum Value<L: Lang> {
     // A base primitive value
@@ -38,6 +68,7 @@ pub enum Value<L: Lang> {
     List(Vec<Self>),
 }
 
+// Grr bad automatic derive bounds
 impl<L: Lang> Clone for Value<L> {
     fn clone(&self) -> Self {
         match self {
@@ -60,6 +91,7 @@ impl<L: Lang> Value<L> {
     }
 }
 
+/// Represents a type in a language.
 #[derive(Debug)]
 pub enum Ty<L: Lang> {
     // A base primitive type
@@ -74,6 +106,7 @@ pub enum Ty<L: Lang> {
     List(Box<Self>),
 }
 
+// Grr bad automatic derive bounds
 impl<L: Lang> Clone for Ty<L> {
     fn clone(&self) -> Self {
         match self {
@@ -86,6 +119,7 @@ impl<L: Lang> Clone for Ty<L> {
     }
 }
 
+// Grr bad automatic derive bounds
 impl<L: Lang> PartialEq for Ty<L> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -99,27 +133,31 @@ impl<L: Lang> PartialEq for Ty<L> {
     }
 }
 
+/// Represents an expression node in the AST.
+///
+/// Note that `let _ = ... in ...` does not exist since it may be represented with either `match ... in { _ => ... }`
+/// or `(_ -> ...)(...)`
 #[derive(Debug)]
 pub enum Expr<L: Lang> {
-    // Evaluate a concrete value
+    /// Evaluate a concrete value
     Value(Value<L>),
-    // Evaluate a bound value
+    /// Evaluate a bound value
     Binding(L::Ident),
-    // Evaluate a lazily-expressed term
+    /// Evaluate a lazily-expressed term
     Lazy(Box<TyNode<Self, L>>),
-    // Evaluate a program intrinsic
+    /// Evaluate a program intrinsic
     Intrinsic(usize, Vec<TyNode<Self, L>>),
-    // Evaluate the application of a function with another term
+    /// Evaluate the application of a function with another term
     Apply(Box<TyNode<Self, L>>, Box<TyNode<Self, L>>),
-    // Evaluate a function constructor
+    /// Evaluate a function constructor
     Func(L::Ident, Box<TyNode<Self, L>>),
-    // Evaluate a match by comparing an expression against many pattern/expression arms
+    /// Evaluate a match by comparing an expression against many pattern/expression arms
     Match(Box<TyNode<Self, L>>, Vec<(TyNode<Pat<L>, L>, Box<TyNode<Self, L>>)>),
-    // Evaluate a product type variant constructor
+    /// Evaluate a product type variant constructor
     Product(Vec<TyNode<Self, L>>),
-    // Evaluate a sum type variant constructor
+    /// Evaluate a sum type variant constructor
     Variant(usize, Box<TyNode<Self, L>>),
-    // Evaluate a list constructor
+    /// Evaluate a list constructor
     List(Vec<TyNode<Self, L>>),
 }
 
@@ -153,6 +191,8 @@ impl<L: Lang> Expr<L> {
         }
     }
 
+    /// Return the environment of this expression (i.e: the bindings, from the parent scope, that are required to
+    /// evaluate it).
     pub fn get_binding_deps(&self) -> Vec<L::Ident> {
         let mut accounted_for = Vec::new();
         let mut deps = Vec::new();
@@ -161,6 +201,7 @@ impl<L: Lang> Expr<L> {
     }
 }
 
+// Grr bad automatic derive bounds
 impl<L: Lang> Clone for Expr<L> {
     fn clone(&self) -> Self {
         match self {
@@ -178,22 +219,24 @@ impl<L: Lang> Clone for Expr<L> {
     }
 }
 
+/// Represents a pattern in the AST.
 #[derive(Debug)]
 pub enum Pat<L: Lang> {
-    // Match against anything
+    /// Match against anything
     Wildcard,
-    // Match against a pre-evaluated expression
+    /// Match against a pre-evaluated expression
     Expr(Box<TyNode<Expr<L>, L>>),
-    // Match against the fields of a product type
+    /// Match against the fields of a product type
     Product(Vec<TyNode<Self, L>>),
-    // Match against a sum type variant
+    /// Match against a sum type variant
     Variant(usize, Box<TyNode<Self, L>>),
-    // Match against a pattern while binding that pattern
+    /// Match against a pattern while binding that pattern
     Bind(L::Ident, Box<TyNode<Self, L>>),
-    // Match against the elements of a (potentially bounded) list
+    /// Match against the elements of a (potentially bounded) list
     List(Vec<TyNode<Self, L>>, bool),
 }
 
+// Grr bad automatic derive bounds
 impl<L: Lang> Clone for Pat<L> {
     fn clone(&self) -> Self {
         match self {
@@ -207,11 +250,13 @@ impl<L: Lang> Clone for Pat<L> {
     }
 }
 
+/// Represents a typed node in the AST.
 pub struct TyNode<I, L: Lang> {
     inner: I,
     ty: Ty<L>,
 }
 
+// Grr bad automatic derive bounds
 impl<I: Clone, L: Lang> Clone for TyNode<I, L> {
     fn clone(&self) -> Self {
         Self {
