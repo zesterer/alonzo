@@ -28,8 +28,18 @@ macro_rules! expr {
             Ty::Base(Num),
         )
     };
-    // Atoms
+    // Paren expr
     (( $($x:tt)* )) => { expr!($($x)*) };
+    // List
+    ([ $($x:tt),* $(,)? ]) => {
+        TyNode::<_, Rusty>::new(
+            Expr::<Rusty>::List(vec![
+                $( expr!($x) ),*
+            ]),
+            Ty::Base(Num),
+        )
+    };
+    // Numeric literal
     ($x:literal) => {
         TyNode::<_, Rusty>::new(
             Expr::<Rusty>::Value(Value::Base($x)),

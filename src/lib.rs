@@ -34,6 +34,8 @@ pub enum Value<L: Lang> {
     Product(Vec<Self>),
     // A sum type variant value
     Variant(usize, Box<Self>),
+    // A list value
+    List(Vec<Self>),
 }
 
 impl<L: Lang> Clone for Value<L> {
@@ -44,6 +46,7 @@ impl<L: Lang> Clone for Value<L> {
             Value::Func(param, body, env) => Value::Func(param.clone(), body.clone(), env.clone()),
             Value::Product(xs) => Value::Product(xs.clone()),
             Value::Variant(tag, x) => Value::Variant(*tag, x.clone()),
+            Value::List(xs) => Value::List(xs.clone()),
         }
     }
 }
@@ -67,6 +70,8 @@ pub enum Ty<L: Lang> {
     Product(Vec<Self>),
     // A sum type
     Sum(Vec<Self>),
+    // A list type
+    List(Box<Self>),
 }
 
 impl<L: Lang> Clone for Ty<L> {
@@ -76,6 +81,7 @@ impl<L: Lang> Clone for Ty<L> {
             Ty::Func(i, o) => Ty::Func(i.clone(), o.clone()),
             Ty::Product(xs) => Ty::Product(xs.clone()),
             Ty::Sum(xs) => Ty::Sum(xs.clone()),
+            Ty::List(x) => Ty::List(x.clone()),
         }
     }
 }
@@ -87,6 +93,7 @@ impl<L: Lang> PartialEq for Ty<L> {
             (Ty::Func(i0, o0), Ty::Func(i1, o1)) => i0 == i1 && o0 == o1,
             (Ty::Product(xs), Ty::Product(ys)) => xs == ys,
             (Ty::Sum(xs), Ty::Sum(ys)) => xs == ys,
+            (Ty::List(x), Ty::List(y)) => x == y,
             _ => false,
         }
     }
@@ -112,6 +119,8 @@ pub enum Expr<L: Lang> {
     Product(Vec<TyNode<Self, L>>),
     // Evaluate a sum type variant constructor
     Variant(usize, Box<TyNode<Self, L>>),
+    // Evaluate a list constructor
+    List(Vec<TyNode<Self, L>>),
 }
 
 impl<L: Lang> Expr<L> {
@@ -138,6 +147,9 @@ impl<L: Lang> Expr<L> {
                 .iter()
                 .for_each(|e| e.get_binding_deps_inner(accounted_for, deps)),
             Expr::Variant(_, e) => e.get_binding_deps_inner(accounted_for, deps),
+            Expr::List(es) => es
+                .iter()
+                .for_each(|e| e.get_binding_deps_inner(accounted_for, deps)),
         }
     }
 
@@ -161,6 +173,7 @@ impl<L: Lang> Clone for Expr<L> {
             Expr::Match(x, arms) => Expr::Match(x.clone(), arms.clone()),
             Expr::Product(xs) => Expr::Product(xs.clone()),
             Expr::Variant(tag, x) => Expr::Variant(*tag, x.clone()),
+            Expr::List(xs) => Expr::List(xs.clone()),
         }
     }
 }
@@ -177,6 +190,8 @@ pub enum Pat<L: Lang> {
     Variant(usize, Box<TyNode<Self, L>>),
     // Match against a pattern while binding that pattern
     Bind(L::Ident, Box<TyNode<Self, L>>),
+    // Match against the elements of a (potentially bounded) list
+    List(Vec<TyNode<Self, L>>, bool),
 }
 
 impl<L: Lang> Clone for Pat<L> {
@@ -187,6 +202,7 @@ impl<L: Lang> Clone for Pat<L> {
             Pat::Product(xs) => Pat::Product(xs.clone()),
             Pat::Variant(tag, x) => Pat::Variant(*tag, x.clone()),
             Pat::Bind(binding, x) => Pat::Bind(binding.clone(), x.clone()),
+            Pat::List(xs, bounded) => Pat::List(xs.clone(), *bounded),
         }
     }
 }

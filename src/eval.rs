@@ -111,6 +111,11 @@ impl<L: Lang> Expr<L> {
                 .collect::<Result<Vec<_>, _>>()
                 .map(Value::Product)?,
             Expr::Variant(tag, inner) => Value::Variant(*tag, Box::new(inner.eval(scope, intrinsics)?)),
+            Expr::List(elements) => elements
+                .iter()
+                .map(|field| field.eval(scope, intrinsics))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::List)?,
             Expr::Match(_, _) => todo!(),
         })
     }
@@ -122,8 +127,9 @@ impl<L: Lang> Value<L> {
             Value::Base(x) => Ok(x.clone()),
             Value::Lazy(x) => x.eval(scope, intrinsics)?.into_base(scope, intrinsics),
             Value::Func(_, _, _) => panic!("Expected base value, found function value"),
-            Value::Product(xs) => panic!("Expected base value, found product ({}) value", xs.len()),
-            Value::Variant(i, _) => panic!("Expected base value, found variant ({}) value", i),
+            Value::Product(xs) => panic!("Expected base value, found product with {} elements", xs.len()),
+            Value::Variant(tag, _) => panic!("Expected base value, found variant with tag {}", tag),
+            Value::List(xs) => panic!("Expected base value, found list of length {}", xs.len()),
         }
     }
 }
