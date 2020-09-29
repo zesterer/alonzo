@@ -6,6 +6,8 @@ pub enum Error {
     NoSuchBinding,
     NotAFunction,
     NotABaseValue,
+    NoMatchingPattern,
+    TypeMismatch,
 }
 
 /// Represents values available in the current scope.
@@ -40,6 +42,7 @@ impl<'a, L: Lang> Scope<'a, L> {
             Scope::Local(_, _, parent) => parent.find(label),
             Scope::Many(many, parent) => many
                 .iter()
+                .rev()
                 .find(|(local, _)| local == label)
                 .map(|(_, val)| val.clone())
                 .or_else(|| parent.find(label)),
@@ -114,6 +117,17 @@ impl<L: Lang> Expr<L> {
                     .ok_or_else(|| Error::NoSuchBinding)?;
                 Value::Func(l.clone(), body.clone(), env)
             },
+            Expr::Match(x, arms) => {
+                let x = x.eval(scope, intrinsics)?;
+
+                for (pat, body) in arms {
+                    if let Some(bindings) = pat.try_extract(&x, scope, intrinsics)? {
+                        return body.eval(&scope.with_many(bindings), intrinsics);
+                    }
+                }
+
+                return Err(Error::NoMatchingPattern);
+            },
             Expr::Product(fields) => fields
                 .iter()
                 .map(|field| field.eval(scope, intrinsics))
@@ -125,12 +139,92 @@ impl<L: Lang> Expr<L> {
                 .map(|field| field.eval(scope, intrinsics))
                 .collect::<Result<Vec<_>, _>>()
                 .map(Value::List)?,
-            Expr::Match(_, _) => todo!(),
         })
     }
 }
 
+impl<L: Lang> Pat<L> {
+    fn try_extract_inner(
+        &self,
+        scope: &Scope<L>,
+        intrinsics: &Intrinsics<L>,
+        val: &Value<L>,
+        bindings: &mut Vec<(L::Ident, Value<L>)>,
+    ) -> Result<bool, Error> {
+        match (self, val) {
+            (Pat::Wildcard, _) => Ok(true),
+            (Pat::Expr(expr), val) => expr.eval(scope, intrinsics)?.matches(val, scope, intrinsics),
+            (Pat::Product(xs), Value::Product(ys)) if xs.len() == ys.len() => xs
+                .iter()
+                .zip(ys.iter())
+                .try_fold(true, |a, (x, y)| {
+                    Ok(a && x.try_extract_inner(scope, intrinsics, y, bindings)?)
+                }),
+            (Pat::Variant(tag_x, x), Value::Variant(tag_y, y)) => if tag_x == tag_y {
+                x.try_extract_inner(scope, intrinsics, y, bindings)
+            } else {
+                Ok(false)
+            },
+            (Pat::List(xs, bounded), Value::List(ys)) if (!*bounded && xs.len() >= ys.len()) || xs.len() == ys.len() => xs
+                .iter()
+                .zip(ys.iter())
+                .try_fold(true, |a, (x, y)| {
+                    Ok(a && x.try_extract_inner(scope, intrinsics, y, bindings)?)
+                }),
+            (Pat::Bind(name, x), y) => {
+                bindings.push((name.clone(), y.clone()));
+                x.try_extract_inner(scope, intrinsics, y, bindings)
+            },
+            _ => Err(Error::TypeMismatch),
+        }
+    }
+
+    fn try_extract(
+        &self,
+        val: &Value<L>,
+        scope: &Scope<L>,
+        intrinsics: &Intrinsics<L>,
+    ) -> Result<Option<Vec<(L::Ident, Value<L>)>>, Error> {
+        let mut bindings = Vec::new();
+        let matches = self.try_extract_inner(scope, intrinsics, val, &mut bindings)?;
+        Ok(if matches { Some(bindings) } else { None })
+    }
+}
+
 impl<L: Lang> Value<L> {
+    fn matches(&self, other: &Self, scope: &Scope<L>, intrinsics: &Intrinsics<L>) -> Result<bool, Error> {
+        match (self, other) {
+            // First, force evaluation of lazies
+            (Value::Lazy(x), y) => x.eval(scope, intrinsics)?.matches(y, scope, intrinsics),
+            (x, Value::Lazy(y)) => x.matches(&y.eval(scope, intrinsics)?, scope, intrinsics),
+
+            (Value::Base(x), Value::Base(y)) => Ok(x == y),
+            (Value::Func(_, _, _), Value::Func(_, _, _)) => Ok(false), // Function values never match
+            (Value::Product(xs), Value::Product(ys)) if xs.len() == ys.len() => xs
+                .iter()
+                .zip(ys.iter())
+                .try_fold(true, |a, (x, y)| {
+                    Ok(a && x.matches(y, scope, intrinsics)?)
+                }),
+            (Value::Variant(tag_x, x), Value::Variant(tag_y, y)) => if tag_x == tag_y {
+                x.matches(y, scope, intrinsics)
+            } else {
+                Ok(false)
+            },
+            (Value::List(xs), Value::List(ys)) => if xs.len() == ys.len() {
+                xs
+                    .iter()
+                    .zip(ys.iter())
+                    .try_fold(true, |a, (x, y)| {
+                        Ok(a && x.matches(y, scope, intrinsics)?)
+                    })
+            } else {
+                Ok(false)
+            },
+            _ => Err(Error::TypeMismatch),
+        }
+    }
+
     /// Attempt to extract a base value from this value. If the value is expressed lazily, this function will force its
     /// evaluation.
     pub fn into_base(self, scope: &Scope<L>, intrinsics: &Intrinsics<L>) -> Result<L::BaseVal, Error> {

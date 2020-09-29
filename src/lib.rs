@@ -152,7 +152,7 @@ pub enum Expr<L: Lang> {
     /// Evaluate a function constructor
     Func(L::Ident, Box<TyNode<Self, L>>),
     /// Evaluate a match by comparing an expression against many pattern/expression arms
-    Match(Box<TyNode<Self, L>>, Vec<(TyNode<Pat<L>, L>, Box<TyNode<Self, L>>)>),
+    Match(Box<TyNode<Self, L>>, Vec<(TyNode<Pat<L>, L>, TyNode<Self, L>)>),
     /// Evaluate a product type variant constructor
     Product(Vec<TyNode<Self, L>>),
     /// Evaluate a sum type variant constructor
@@ -180,7 +180,17 @@ impl<L: Lang> Expr<L> {
                 body.get_binding_deps_inner(accounted_for, deps);
                 accounted_for.pop();
             },
-            Expr::Match(_, _) => todo!(),
+            Expr::Match(e, arms) => {
+                e.get_binding_deps_inner(accounted_for, deps);
+                for (pat, arm) in arms {
+                    // TODO: pat.get_binding_deps_inner(accounted_for, deps);
+                    let bindings = pat.get_binding_outputs();
+                    let old_len = accounted_for.len();
+                    accounted_for.extend(bindings);
+                    arm.get_binding_deps_inner(accounted_for, deps);
+                    accounted_for.resize_with(old_len, || unreachable!());
+                }
+            },
             Expr::Product(es) => es
                 .iter()
                 .for_each(|e| e.get_binding_deps_inner(accounted_for, deps)),
@@ -230,10 +240,37 @@ pub enum Pat<L: Lang> {
     Product(Vec<TyNode<Self, L>>),
     /// Match against a sum type variant
     Variant(usize, Box<TyNode<Self, L>>),
+    /// Match against the elements of a (potentially bounded) list
+    // TODO: Tail matches?
+    List(Vec<TyNode<Self, L>>, bool),
     /// Match against a pattern while binding that pattern
     Bind(L::Ident, Box<TyNode<Self, L>>),
-    /// Match against the elements of a (potentially bounded) list
-    List(Vec<TyNode<Self, L>>, bool),
+}
+
+impl<L: Lang> Pat<L> {
+    pub fn get_binding_outputs_inner(&self, bindings: &mut Vec<L::Ident>) {
+        match self {
+            Pat::Wildcard => {},
+            Pat::Expr(_) => {},
+            Pat::Product(xs) => xs
+                .iter()
+                .for_each(|x| x.get_binding_outputs_inner(bindings)),
+            Pat::Variant(_, x) => x.get_binding_outputs_inner(bindings),
+            Pat::List(xs, _) => xs
+                .iter()
+                .for_each(|x| x.get_binding_outputs_inner(bindings)),
+            Pat::Bind(name, x) => {
+                bindings.push(name.clone());
+                x.get_binding_outputs_inner(bindings);
+            },
+        }
+    }
+
+    pub fn get_binding_outputs(&self) -> Vec<L::Ident> {
+        let mut bindings = Vec::new();
+        self.get_binding_outputs_inner(&mut bindings);
+        bindings
+    }
 }
 
 // Grr bad automatic derive bounds
@@ -244,8 +281,8 @@ impl<L: Lang> Clone for Pat<L> {
             Pat::Expr(x) => Pat::Expr(x.clone()),
             Pat::Product(xs) => Pat::Product(xs.clone()),
             Pat::Variant(tag, x) => Pat::Variant(*tag, x.clone()),
-            Pat::Bind(binding, x) => Pat::Bind(binding.clone(), x.clone()),
             Pat::List(xs, bounded) => Pat::List(xs.clone(), *bounded),
+            Pat::Bind(binding, x) => Pat::Bind(binding.clone(), x.clone()),
         }
     }
 }

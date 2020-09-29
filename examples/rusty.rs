@@ -16,10 +16,59 @@ impl Lang for Rusty {
 const ADD: usize = 0;
 const MUL: usize = 1;
 
+macro_rules! pat {
+    // Paren pat
+    (( $($x:tt)* )) => { pat!($($x)*) };
+    // List
+    ([ $($x:tt),* $(,)? ]) => {
+        TyNode::<_, Rusty>::new(
+            Pat::<Rusty>::List(vec![
+                $( pat!($x) ),*
+            ], true),
+            Ty::Base(Num),
+        )
+    };
+    // Product
+    ({ $($x:tt),* $(,)? }) => {
+        TyNode::<_, Rusty>::new(
+            Pat::<Rusty>::Product(vec![
+                $( pat!($x) ),*
+            ]),
+            Ty::Base(Num),
+        )
+    };
+    // Numeric literal
+    ($x:literal) => {
+        TyNode::<_, Rusty>::new(
+            Pat::<Rusty>::Expr(Box::new(TyNode::new(
+                Expr::Value(Value::Base($x)),
+                Ty::Base(Num),
+            ))),
+            Ty::Base(Num),
+        )
+    };
+    // ($x:ident) => {
+    //     TyNode::<_, Rusty>::new(
+    //         Expr::<Rusty>::Binding(stringify!($x)),
+    //         Ty::Base(Num),
+    //     )
+    // };
+}
+
 macro_rules! expr {
     // Let
     (let $name:ident = $val:tt in $($tail:tt)*) => {
         expr!($val : |$name| $($tail)*)
+    };
+    // Match
+    (match $val:tt in { $( $pat:tt => $arm:tt ),* $(,)? }) => {
+        TyNode::<_, Rusty>::new(
+            Expr::<Rusty>::Match(
+                Box::new(expr!($val)),
+                vec![$( (pat!($pat), expr!($arm)) ),*],
+            ),
+            Ty::Base(Num),
+        )
     };
     // Call
     ($arg:tt : $($f:tt)*) => {
@@ -34,6 +83,15 @@ macro_rules! expr {
     ([ $($x:tt),* $(,)? ]) => {
         TyNode::<_, Rusty>::new(
             Expr::<Rusty>::List(vec![
+                $( expr!($x) ),*
+            ]),
+            Ty::Base(Num),
+        )
+    };
+    // Product
+    ({ $($x:tt),* $(,)? }) => {
+        TyNode::<_, Rusty>::new(
+            Expr::<Rusty>::Product(vec![
                 $( expr!($x) ),*
             ]),
             Ty::Base(Num),
@@ -80,7 +138,10 @@ fn main() {
         let x = 5.0 in
         let y = 7.0 in
         let add_five = (x:add) in
-        y:add_five
+        match { (y:add_five), (x:add_five) } in {
+            { 10.0, 10.0 } => 0.0,
+            { 12.0, 10.0 } => 100.0,
+        }
     };
 
     // println!("{:#?}", expr);
