@@ -50,9 +50,11 @@ macro_rules! pat {
 }
 
 macro_rules! expr {
+    // Call
+    ($f:tt ( $arg:tt )) => { expr!($arg : $f) };
     // Let
     (let $name:ident = $val:tt in $($tail:tt)*) => {
-        expr!($val : |$name| $($tail)*)
+        expr!($val : $name -> $($tail)*)
     };
     // Match
     (match $val:tt in { $( $pat:tt => $arm:tt ),* $(,)? }) => {
@@ -118,7 +120,7 @@ macro_rules! expr {
         )
     };
     // Functions
-    (|$p:ident| $($body:tt)*) => {
+    ($p:ident -> $($body:tt)*) => {
         TyNode::<_, Rusty>::new(
             Expr::<Rusty>::Func(stringify!($p), Box::new(expr!($($body)*))),
             Ty::Base(Num),
@@ -128,11 +130,11 @@ macro_rules! expr {
 
 fn main() {
     let expr = expr! {
-        let add = (|a| |b| a + b) in
+        let add = (a -> b -> a + b) in
         let x = 5.0 in
         let y = 7.0 in
-        let add_five = (x:add) in
-        match { (y:add_five), (x:add_five) } in {
+        let add_five_to = (add(x)) in
+        match { (add_five_to(y)), (add_five_to(x)) } in {
             { 10.0, 10.0 } => 0.0,
             { 12.0, 10.0 } => 100.0,
         }
