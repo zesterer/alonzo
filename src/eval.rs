@@ -10,6 +10,46 @@ pub enum Error {
     TypeMismatch,
 }
 
+/// Represents a value in a language.
+#[derive(Debug)]
+pub enum Value<L: Lang> {
+    // A base primitive value
+    Base(L::BaseVal),
+    // A lazily-expressed value
+    Lazy(Box<TyNode<Expr<L>, L>>),
+    // A function
+    Func(L::Ident, Box<TyNode<Expr<L>, L>>, Vec<(L::Ident, Self)>),
+    // A product type value
+    Product(Vec<Self>),
+    // A sum type variant value
+    Variant(usize, Box<Self>),
+    // A list value
+    List(Vec<Self>),
+}
+
+// Grr bad automatic derive bounds
+impl<L: Lang> Clone for Value<L> {
+    fn clone(&self) -> Self {
+        match self {
+            Value::Base(x) => Value::Base(x.clone()),
+            Value::Lazy(x) => Value::Lazy(x.clone()),
+            Value::Func(param, body, env) => Value::Func(param.clone(), body.clone(), env.clone()),
+            Value::Product(xs) => Value::Product(xs.clone()),
+            Value::Variant(tag, x) => Value::Variant(*tag, x.clone()),
+            Value::List(xs) => Value::List(xs.clone()),
+        }
+    }
+}
+
+impl<L: Lang> Value<L> {
+    pub fn expect_base(&self) -> &L::BaseVal {
+        match self {
+            Value::Base(x) => x,
+            _ => panic!(),
+        }
+    }
+}
+
 /// Represents values available in the current scope.
 pub enum Scope<'a, L: Lang> {
     None,
@@ -81,7 +121,18 @@ impl<L: Lang> Expr<L> {
     /// Evaluate this expression within the context of a scope and a series of supported intrinsics.
     pub fn eval(self: &TyNode<Self, L>, scope: &Scope<L>, intrinsics: &Intrinsics<L>) -> Result<Value<L>, Error> {
         Ok(match &**self {
-            Expr::Value(v) => v.clone(),
+            Expr::BaseVal(v) => Value::Base(v.clone()),
+            Expr::Product(fields) => fields
+                .iter()
+                .map(|field| field.eval(scope, intrinsics))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::Product)?,
+            Expr::Variant(tag, inner) => Value::Variant(*tag, Box::new(inner.eval(scope, intrinsics)?)),
+            Expr::List(elements) => elements
+                .iter()
+                .map(|field| field.eval(scope, intrinsics))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::List)?,
             Expr::Binding(binding) => scope
                 .find(binding)
                 .ok_or_else(|| Error::NoSuchBinding)?,
@@ -128,17 +179,6 @@ impl<L: Lang> Expr<L> {
 
                 return Err(Error::NoMatchingPattern);
             },
-            Expr::Product(fields) => fields
-                .iter()
-                .map(|field| field.eval(scope, intrinsics))
-                .collect::<Result<Vec<_>, _>>()
-                .map(Value::Product)?,
-            Expr::Variant(tag, inner) => Value::Variant(*tag, Box::new(inner.eval(scope, intrinsics)?)),
-            Expr::List(elements) => elements
-                .iter()
-                .map(|field| field.eval(scope, intrinsics))
-                .collect::<Result<Vec<_>, _>>()
-                .map(Value::List)?,
         })
     }
 }

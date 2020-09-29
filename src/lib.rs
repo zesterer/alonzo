@@ -51,46 +51,6 @@ pub trait Lang {
     type Ident: Clone + Hash + Eq + Debug;
 }
 
-/// Represents a value in a language.
-#[derive(Debug)]
-pub enum Value<L: Lang> {
-    // A base primitive value
-    Base(L::BaseVal),
-    // A lazily-expressed value
-    Lazy(Box<TyNode<Expr<L>, L>>),
-    // A function
-    Func(L::Ident, Box<TyNode<Expr<L>, L>>, Vec<(L::Ident, Self)>),
-    // A product type value
-    Product(Vec<Self>),
-    // A sum type variant value
-    Variant(usize, Box<Self>),
-    // A list value
-    List(Vec<Self>),
-}
-
-// Grr bad automatic derive bounds
-impl<L: Lang> Clone for Value<L> {
-    fn clone(&self) -> Self {
-        match self {
-            Value::Base(x) => Value::Base(x.clone()),
-            Value::Lazy(x) => Value::Lazy(x.clone()),
-            Value::Func(param, body, env) => Value::Func(param.clone(), body.clone(), env.clone()),
-            Value::Product(xs) => Value::Product(xs.clone()),
-            Value::Variant(tag, x) => Value::Variant(*tag, x.clone()),
-            Value::List(xs) => Value::List(xs.clone()),
-        }
-    }
-}
-
-impl<L: Lang> Value<L> {
-    pub fn expect_base(&self) -> &L::BaseVal {
-        match self {
-            Value::Base(x) => x,
-            _ => panic!(),
-        }
-    }
-}
-
 /// Represents a type in a language.
 #[derive(Debug)]
 pub enum Ty<L: Lang> {
@@ -139,8 +99,14 @@ impl<L: Lang> PartialEq for Ty<L> {
 /// or `(_ -> ...)(...)`
 #[derive(Debug)]
 pub enum Expr<L: Lang> {
-    /// Evaluate a concrete value
-    Value(Value<L>),
+    /// Evaluate an expression and match the result
+    BaseVal(L::BaseVal),
+    /// Evaluate a product type variant constructor
+    Product(Vec<TyNode<Self, L>>),
+    /// Evaluate a sum type variant constructor
+    Variant(usize, Box<TyNode<Self, L>>),
+    /// Evaluate a list constructor
+    List(Vec<TyNode<Self, L>>),
     /// Evaluate a bound value
     Binding(L::Ident),
     /// Evaluate a lazily-expressed term
@@ -153,18 +119,19 @@ pub enum Expr<L: Lang> {
     Func(L::Ident, Box<TyNode<Self, L>>),
     /// Evaluate a match by comparing an expression against many pattern/expression arms
     Match(Box<TyNode<Self, L>>, Vec<(TyNode<Pat<L>, L>, TyNode<Self, L>)>),
-    /// Evaluate a product type variant constructor
-    Product(Vec<TyNode<Self, L>>),
-    /// Evaluate a sum type variant constructor
-    Variant(usize, Box<TyNode<Self, L>>),
-    /// Evaluate a list constructor
-    List(Vec<TyNode<Self, L>>),
 }
 
 impl<L: Lang> Expr<L> {
     fn get_binding_deps_inner(&self, accounted_for: &mut Vec<L::Ident>, deps: &mut Vec<L::Ident>) {
         match self {
-            Expr::Value(_) => {},
+            Expr::BaseVal(_) => {},
+            Expr::Product(es) => es
+                .iter()
+                .for_each(|e| e.get_binding_deps_inner(accounted_for, deps)),
+            Expr::Variant(_, e) => e.get_binding_deps_inner(accounted_for, deps),
+            Expr::List(es) => es
+                .iter()
+                .for_each(|e| e.get_binding_deps_inner(accounted_for, deps)),
             Expr::Binding(b) if !accounted_for.contains(b) => deps.push(b.clone()),
             Expr::Binding(_) => {},
             Expr::Lazy(e) => e.get_binding_deps_inner(accounted_for, deps),
@@ -192,13 +159,6 @@ impl<L: Lang> Expr<L> {
                     accounted_for.resize_with(old_len, || unreachable!());
                 }
             },
-            Expr::Product(es) => es
-                .iter()
-                .for_each(|e| e.get_binding_deps_inner(accounted_for, deps)),
-            Expr::Variant(_, e) => e.get_binding_deps_inner(accounted_for, deps),
-            Expr::List(es) => es
-                .iter()
-                .for_each(|e| e.get_binding_deps_inner(accounted_for, deps)),
         }
     }
 
@@ -216,16 +176,16 @@ impl<L: Lang> Expr<L> {
 impl<L: Lang> Clone for Expr<L> {
     fn clone(&self) -> Self {
         match self {
-            Expr::Value(x) => Expr::Value(x.clone()),
+            Expr::BaseVal(x) => Expr::BaseVal(x.clone()),
+            Expr::Product(xs) => Expr::Product(xs.clone()),
+            Expr::Variant(tag, x) => Expr::Variant(*tag, x.clone()),
+            Expr::List(xs) => Expr::List(xs.clone()),
             Expr::Binding(binding) => Expr::Binding(binding.clone()),
             Expr::Lazy(x) => Expr::Lazy(x.clone()),
             Expr::Intrinsic(id, xs) => Expr::Intrinsic(*id, xs.clone()),
             Expr::Apply(f, arg) => Expr::Apply(f.clone(), arg.clone()),
             Expr::Func(param, body) => Expr::Func(param.clone(), body.clone()),
             Expr::Match(x, arms) => Expr::Match(x.clone(), arms.clone()),
-            Expr::Product(xs) => Expr::Product(xs.clone()),
-            Expr::Variant(tag, x) => Expr::Variant(*tag, x.clone()),
-            Expr::List(xs) => Expr::List(xs.clone()),
         }
     }
 }
