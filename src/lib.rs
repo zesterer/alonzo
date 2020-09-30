@@ -5,10 +5,11 @@ pub mod eval;
 
 use std::{
     collections::HashMap,
-    ops::Deref,
+    ops::{Deref, DerefMut},
     cmp::{PartialEq, Eq},
     fmt::{self, Debug},
     hash::Hash,
+    rc::Rc,
 };
 
 /// Definitions that allow a compiler frontend to communicate with `alonzo`.
@@ -104,21 +105,21 @@ pub enum Expr<L: Lang> {
     /// Evaluate a product type variant constructor
     Product(Vec<TyNode<Self, L>>),
     /// Evaluate a sum type variant constructor
-    Variant(usize, Box<TyNode<Self, L>>),
+    Variant(usize, TyNode<Self, L>),
     /// Evaluate a list constructor
     List(Vec<TyNode<Self, L>>),
     /// Evaluate a bound value
     Binding(L::Ident),
     /// Evaluate a lazily-expressed term
-    Lazy(Box<TyNode<Self, L>>),
+    Lazy(TyNode<Self, L>),
     /// Evaluate a program intrinsic
     Intrinsic(usize, Vec<TyNode<Self, L>>),
     /// Evaluate the application of a function with another term
-    Apply(Box<TyNode<Self, L>>, Box<TyNode<Self, L>>),
+    Apply(TyNode<Self, L>, TyNode<Self, L>),
     /// Evaluate a function constructor
-    Func(L::Ident, Box<TyNode<Self, L>>),
+    Func(L::Ident, TyNode<Self, L>),
     /// Evaluate a match by comparing an expression against many pattern/expression arms
-    Match(Box<TyNode<Self, L>>, Vec<(TyNode<Pat<L>, L>, TyNode<Self, L>)>),
+    Match(TyNode<Self, L>, Vec<(TyNode<Pat<L>, L>, TyNode<Self, L>)>),
 }
 
 impl<L: Lang> Expr<L> {
@@ -196,16 +197,16 @@ pub enum Pat<L: Lang> {
     /// Match against anything
     Wildcard,
     /// Match against a pre-evaluated expression
-    Expr(Box<TyNode<Expr<L>, L>>),
+    Expr(TyNode<Expr<L>, L>),
     /// Match against the fields of a product type
     Product(Vec<TyNode<Self, L>>),
     /// Match against a sum type variant
-    Variant(usize, Box<TyNode<Self, L>>),
+    Variant(usize, TyNode<Self, L>),
     /// Match against the elements of a (potentially bounded) list
     // TODO: Tail matches?
     List(Vec<TyNode<Self, L>>, bool),
     /// Match against a pattern while binding that pattern
-    Bind(L::Ident, Box<TyNode<Self, L>>),
+    Bind(L::Ident, TyNode<Self, L>),
 }
 
 impl<L: Lang> Pat<L> {
@@ -266,8 +267,8 @@ impl<L: Lang> Clone for Pat<L> {
 
 /// Represents a typed node in the AST.
 pub struct TyNode<I, L: Lang> {
-    inner: I,
-    ty: Ty<L>,
+    inner: Rc<I>,
+    ty: Rc<Ty<L>>,
 }
 
 // Grr bad automatic derive bounds
@@ -283,8 +284,8 @@ impl<I: Clone, L: Lang> Clone for TyNode<I, L> {
 impl<I, L: Lang> TyNode<I, L> {
     pub fn new(inner: I, ty: Ty<L>) -> Self {
         Self {
-            inner,
-            ty,
+            inner: Rc::new(inner),
+            ty: Rc::new(ty),
         }
     }
 }
@@ -292,6 +293,10 @@ impl<I, L: Lang> TyNode<I, L> {
 impl<I, L: Lang> Deref for TyNode<I, L> {
     type Target = I;
     fn deref(&self) -> &Self::Target { &self.inner }
+}
+
+impl<I: Clone, L: Lang> DerefMut for TyNode<I, L> {
+    fn deref_mut(&mut self) -> &mut Self::Target { Rc::make_mut(&mut self.inner) }
 }
 
 impl<I: Debug, L: Lang> fmt::Debug for TyNode<I, L> {

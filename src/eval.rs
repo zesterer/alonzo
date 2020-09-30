@@ -16,9 +16,9 @@ pub enum Value<L: Lang> {
     // A base primitive value
     Base(L::BaseVal),
     // A lazily-expressed value
-    Lazy(Box<TyNode<Expr<L>, L>>),
+    Lazy(TyNode<Expr<L>, L>),
     // A function
-    Func(L::Ident, Box<TyNode<Expr<L>, L>>, Vec<(L::Ident, Self)>),
+    Func(L::Ident, TyNode<Expr<L>, L>, Vec<(L::Ident, Self)>),
     // A product type value
     Product(Vec<Self>),
     // A sum type variant value
@@ -76,7 +76,6 @@ impl<'a, L: Lang> Scope<'a, L> {
             Scope::Program(prog) => prog.defs
                 .get(label)
                 .cloned()
-                .map(Box::new)
                 .map(Value::Lazy), // TODO
             Scope::Local(local, val, _) if local == label => Some(val.clone()),
             Scope::Local(_, _, parent) => parent.find(label),
